@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Environment Variables (CRITICAL: Do not upload secrets to GitHub)
+.env
+.env.*
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Misc
+.DS_Store
+*.pem
+
+# Firebase keys (Do not upload!)
+*firebase-adminsdk*.json
+serviceAccountKey.json
