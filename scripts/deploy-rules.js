@@ -6,8 +6,8 @@ const admin = require('firebase-admin');
 const https = require('https');
 const path = require('path');
 
-const SERVICE_ACCOUNT_PATH = path.resolve(__dirname, '../accompany-e9305-firebase-adminsdk-fbsvc-c30c352c7c.json');
-const PROJECT_ID = 'accompany-e9305';
+const SERVICE_ACCOUNT_PATH = path.resolve(__dirname, '../dogmart-backend/dog-mart-firebase-adminsdk.json');
+const PROJECT_ID = 'dog-mart-846bc';
 
 const FIRESTORE_RULES = `rules_version = '2';
 service cloud.firestore {
@@ -105,7 +105,7 @@ async function deployFirestoreRules(token) {
 
 async function deployRtdbRules(token) {
     const res = await httpsRequest(
-        'accompany-e9305-default-rtdb.firebaseio.com',
+        'dog-mart-846bc-default-rtdb.firebaseio.com',
         '/.settings/rules.json',
         'PUT', token,
         RTDB_RULES

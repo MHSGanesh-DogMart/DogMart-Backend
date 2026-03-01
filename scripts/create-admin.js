@@ -1,8 +1,8 @@
 /**
- * Accompany — Create Admin User Script (REST API version)
+ * DogMart — Create Admin User Script (REST API version)
  *
  * Uses Firebase Authentication REST API + Admin SDK to:
- * 1. Create admin@accompany.app account via Firebase REST API
+ * 1. Create admin@dogmart.com account via Firebase REST API
  * 2. Set admin: true custom claim via Admin SDK
  *
  * Run: node scripts/create-admin.js
@@ -16,13 +16,13 @@ const https = require('https');
 // ── Firebase web API key (from Firebase console → Project settings → General)
 const WEB_API_KEY = 'AIzaSyBPbwHxNMQBytE-oPsXUizVZN6LFXkQJMo';
 
-const ADMIN_EMAIL = 'admin@accompany.app';
-const ADMIN_PASSWORD = 'Accompany@2026'; // ⚠️ Change after first login!
+const ADMIN_EMAIL = 'admin@dogmart.com';
+const ADMIN_PASSWORD = 'DogMart@2026'; // ⚠️ Change after first login!
 
 // ── Init Admin SDK for custom claims
-const keyPath = path.resolve('./accompany-e9305-firebase-adminsdk-fbsvc-c30c352c7c.json');
+const keyPath = path.resolve('./dogmart-backend/dog-mart-firebase-adminsdk.json');
 if (!admin.apps.length) {
-    admin.initializeApp({ credential: admin.credential.cert(require(keyPath)), projectId: 'accompany-e9305' });
+    admin.initializeApp({ credential: admin.credential.cert(require(keyPath)), projectId: 'dog-mart-846bc' });
 }
 const auth = admin.auth();
 
@@ -54,7 +54,7 @@ function firebaseRestPost(endpoint, body) {
 }
 
 async function main() {
-    console.log('\n🔥 Accompany — Admin Account Setup\n');
+    console.log('\n🔥 DogMart — Admin Account Setup\n');
 
     let uid;
 

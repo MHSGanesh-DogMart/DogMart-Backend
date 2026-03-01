@@ -19,7 +19,7 @@ async function sendToToken(token, title, body, data = {}) {
             token,
             notification: { title, body },
             data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
-            android: { priority: 'high', notification: { sound: 'default', channelId: 'accompany_main' } },
+            android: { priority: 'high', notification: { sound: 'default', channelId: 'dogmart_main' } },
             apns: { payload: { aps: { sound: 'default', badge: 1 } } },
             webpush: {
                 notification: { icon: '/logo192.png', badge: '/logo192.png', vibrate: [200, 100, 200] },
