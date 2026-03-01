@@ -14,6 +14,12 @@ app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 app.use(morgan('dev'));
 
+// Web Landing Page
+app.use(express.static(require('path').join(__dirname, '../public')));
+
+// Fallback redirect for root api to landing page
+app.get('/', (req, res) => res.sendFile(require('path').join(__dirname, '../public/index.html')));
+
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
 

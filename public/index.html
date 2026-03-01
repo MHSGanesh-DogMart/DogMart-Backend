@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DogMart - Trusted Locals for Your Best Friend</title>
+    <meta name="description"
+        content="Find verified pet groomers, walkers, and boarders near you. The ultimate marketplace for pet owners.">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- CSS -->
+    <style>
+        :root {
+            --primary: #FF7B54;
+            --primary-light: #FFB26B;
+            --primary-dark: #E0603B;
+            --text-main: #2D3748;
+            --text-muted: #718096;
+            --bg-light: #FFFCF9;
+            --card-bg: #FFFFFF;
+            --border: #EDF2F7;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: var(--text-main);
+            background-color: var(--bg-light);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        .brand-font {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* Nav */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 5%;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-main);
+            font-weight: 600;
+            transition: var(--transition);
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        /* Hero */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 8rem 5% 4rem;
+            background: linear-gradient(135deg, #FFF5F0 0%, #FFEBE1 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-content {
+            flex: 1;
+            max-width: 600px;
+            z-index: 2;
+        }
+
+        .hero-title {
+            font-size: 4rem;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            color: var(--text-main);
+            font-weight: 800;
+        }
+
+        .hero-title span {
+            color: var(--primary);
+        }
+
+        .hero-subtitle {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            margin-bottom: 2.5rem;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--primary);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-weight: 700;
+            text-decoration: none;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            transition: var(--transition);
+            box-shadow: 0 10px 20px rgba(255, 123, 84, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 25px rgba(255, 123, 84, 0.4);
+            background: var(--primary-dark);
+        }
+
+        .hero-image {
+            flex: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1;
+        }
+
+        .hero-image img {
+            width: 100%;
+            max-width: 600px;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-20px);
+            }
+
+            100% {
+                transform: translateY(0px);
+            }
+        }
+
+        /* Features */
+        .features {
+            padding: 6rem 5%;
+            background: white;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            color: var(--text-main);
+            margin-bottom: 1rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background: var(--bg-light);
+            padding: 2.5rem 2rem;
+            border-radius: 24px;
+            text-align: center;
+            transition: var(--transition);
+            border: 1px solid var(--border);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
+            border-color: var(--primary-light);
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-main);
+        }
+
+        /* App Preview Section */
+        .app-preview {
+            padding: 6rem 5%;
+            background: var(--bg-light);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .app-text {
+            flex: 1;
+            max-width: 500px;
+        }
+
+        .app-screens {
+            flex: 1;
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+        }
+
+        .phone-mockup {
+            width: 250px;
+            height: 500px;
+            background: var(--primary);
+            border-radius: 40px;
+            border: 10px solid #222;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 2rem;
+            font-family: 'Outfit';
+            font-weight: 800;
+        }
+
+        .mockup-1 {
+            transform: translateY(30px) rotate(-5deg);
+            background: linear-gradient(135deg, #FF7B54, #FFB26B);
+        }
+
+        .mockup-2 {
+            transform: translateY(-30px) rotate(5deg);
+            background: linear-gradient(135deg, #4A90E2, #50E3C2);
+        }
+
+        /* Legal Section Container */
+        .legal-tabs {
+            padding: 6rem 5%;
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.05);
+            transform: translateY(-50px);
+        }
+
+        .tab-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 1rem;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: var(--transition);
+            border-radius: 50px;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.5s ease;
+            color: var(--text-muted);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .tab-content h3 {
+            color: var(--text-main);
+            font-size: 1.8rem;
+            margin: 2rem 0 1rem;
+        }
+
+        .tab-content h4 {
+            color: var(--text-main);
+            font-size: 1.3rem;
+            margin: 1.5rem 0 0.5rem;
+        }
+
+        .tab-content p,
+        .tab-content ul {
+            margin-bottom: 1.2rem;
+        }
+
+        .tab-content ul {
+            padding-left: 1.5rem;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Footer */
+        footer {
+            background: var(--text-main);
+            color: white;
+            text-align: center;
+            padding: 3rem 5%;
+            margin-top: -50px;
+            padding-top: 100px;
+            /* offset the overlap */
+        }
+
+        @media (max-width: 900px) {
+            .hero {
+                flex-direction: column;
+                text-align: center;
+                padding-top: 10rem;
+            }
+
+            .hero-title {
+                font-size: 3rem;
+            }
+
+            .app-preview {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .app-screens {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .mockup-1,
+            .mockup-2 {
+                transform: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Navigation -->
+    <nav>
+        <a href="#" class="logo">🐾 DogMart</a>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#app">The App</a>
+            <a href="#legal">Legal</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1 class="hero-title">Trusted Locals for Your <span>Best Friend.</span></h1>
+            <p class="hero-subtitle">Discover and book verified pet groomers, walkers, and loving boarders in your
+                neighborhood. The ultimate ecosystem for pet parents.</p>
+            <a href="#download" class="btn-primary">
+                Download App
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+            </a>
+        </div>
+        <div class="hero-image">
+            <!-- Using an emoji/svg composition to stay self-contained without needing image assets -->
+            <div style="font-size: 15rem; filter: drop-shadow(0 20px 30px rgba(255,123,84,0.2));">🐕</div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="section-header">
+            <h2 class="section-title">Everything Your Pet Needs</h2>
+            <p style="color: var(--text-muted); font-size: 1.2rem;">All in one beautifully crafted app.</p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🛁</div>
+                <h3 class="feature-title">Expert Grooming</h3>
+                <p>Book professional baths, haircuts, and nail trims right at your doorstep or nearby verified salons.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🦮</div>
+                <h3 class="feature-title">Verified Walkers</h3>
+                <p>Ensure your buddy gets their daily exercise with safe, tracked walks by trusted local dog walkers.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🏠</div>
+                <h3 class="feature-title">Loving Boarding</h3>
+                <p>Skip the kennel. Find cozy homes in your neighborhood where your pet becomes part of the family.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🐶</div>
+                <h3 class="feature-title">Pet Marketplace</h3>
+                <p>Looking for a new family member? Browse adorable breeds safely, filter by categories, and chat
+                    securely.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- App Preview -->
+    <section id="app" class="app-preview">
+        <div class="app-text">
+            <h2 class="section-title" style="font-size: 3rem;">Premium. Fast.<br>Secure.</h2>
+            <p style="font-size: 1.2rem; color: var(--text-muted); margin-bottom: 2rem;">
+                DogMart is built natively to provide a buttery-smooth experience. Manage your "My Dogs" wallet, chat
+                with service providers in real-time, and track your bookings with absolute confidence.
+            </p>
+            <ul style="list-style: none; display: flex; flex-direction: column; gap: 1rem;">
+                <li style="display: flex; align-items: center; gap: 1rem; font-weight: 600;"><span
+                        style="color: var(--primary);">✓</span> Real-time Socket.IO Chat</li>
+                <li style="display: flex; align-items: center; gap: 1rem; font-weight: 600;"><span
+                        style="color: var(--primary);">✓</span> Aadhaar Verified Providers</li>
+                <li style="display: flex; align-items: center; gap: 1rem; font-weight: 600;"><span
+                        style="color: var(--primary);">✓</span> Secure Razorpay Payments</li>
+            </ul>
+        </div>
+        <div class="app-screens">
+            <div class="phone-mockup mockup-1">Feed</div>
+            <div class="phone-mockup mockup-2">Booking</div>
+        </div>
+    </section>
+
+    <!-- Legal/Docs Section -->
+    <section id="legal" style="background: var(--bg-light); padding-bottom: 2rem;">
+        <div class="legal-tabs">
+            <div class="tab-buttons">
+                <button class="tab-btn active" onclick="switchTab('privacy')">Privacy Policy</button>
+                <button class="tab-btn" onclick="switchTab('terms')">Terms & Conditions</button>
+            </div>
+
+            <!-- Privacy Policy Content -->
+            <div id="privacy" class="tab-content active">
+                <h2 style="color: var(--text-main); font-size: 2rem; font-family: 'Outfit';">Privacy Policy</h2>
+                <p><em>Last Updated: March 2026</em></p>
+                <p>Welcome to DogMart. We are committed to protecting your personal information and your right to
+                    privacy. If you have any questions or concerns about this privacy notice, or our practices with
+                    regards to your personal information, please contact us.</p>
+
+                <h3>1. Information We Collect</h3>
+                <p>We collect personal information that you voluntarily provide to us when you register on the App,
+                    express an interest in obtaining information about us or our products and Services, or otherwise
+                    when you contact us.</p>
+                <ul>
+                    <li><strong>Personal Info:</strong> Names, phone numbers, email addresses, and passwords.</li>
+                    <li><strong>Provider Verification:</strong> For service providers, we may collect government-issued
+                        ID (like Aadhaar) strictly for safety verification.</li>
+                    <li><strong>Pet Info:</strong> Bios, breeds, photos, and medical/vaccination records of your pets.
+                    </li>
+                </ul>
+
+                <h3>2. How We Use Your Information</h3>
+                <p>We process your information for purposes based on legitimate business interests, the fulfillment of
+                    our contract with you, compliance with our legal obligations, and/or your consent.</p>
+                <ul>
+                    <li>To facilitate account creation and logon process.</li>
+                    <li>To completely connect pet owners with local verified providers.</li>
+                    <li>To send administrative information to you (Booking updates, Chat Notifications).</li>
+                </ul>
+
+                <h3>3. Will Your Information Be Shared?</h3>
+                <p>We only share information with your consent, to comply with laws, to provide you with services, to
+                    protect your rights, or to fulfill business obligations. When you book a service, necessary details
+                    (e.g., Dog Name, Service Time) are shared with the Provider.</p>
+
+                <h3>4. Security</h3>
+                <p>We use state-of-the-art encryption combined with Firebase and MongoDB secure servers to keep your
+                    personal information, chats, and images protected.</p>
+            </div>
+
+            <!-- Terms Content -->
+            <div id="terms" class="tab-content">
+                <h2 style="color: var(--text-main); font-size: 2rem; font-family: 'Outfit';">Terms and Conditions</h2>
+                <p><em>Last Updated: March 2026</em></p>
+
+                <h3>1. Agreement to Terms</h3>
+                <p>These Terms of Use constitute a legally binding agreement made between you, whether personally or on
+                    behalf of an entity ("you") and DogMart ("Company", "we", "us", or "our"), concerning your access to
+                    and use of the DogMart mobile application as well as any other media form related, linked, or
+                    otherwise connected thereto.</p>
+
+                <h3>2. Service Provider Disclaimer</h3>
+                <p>DogMart acts as a marketplace connecting pet owners with service providers. While we implement a
+                    verification process, we are not directly liable for the actions, quality of service, or conduct of
+                    independent Service Providers. Users engage services at their own risk.</p>
+
+                <h3>3. Platform Subscriptions & Payments</h3>
+                <ul>
+                    <li>Premium subscriptions grant specific benefits (e.g., ad-free experience, featured listings).
+                        Payments are processed securely via Razorpay.</li>
+                    <li>For Service Bookings, DogMart collects a platform commission from the provider's earnings.</li>
+                    <li>Refund policies apply strictly to cancellations made within the designated grace period prior to
+                        a booking start time.</li>
+                </ul>
+
+                <h3>4. User Generated Content</h3>
+                <p>You may be invited to chat, contribute to, or participate in blogs, message boards, online forums,
+                    and other functionality. We are not responsible for user-generated content, though we reserve the
+                    right to remove offensive, misleading, or illegal material.</p>
+
+                <h3>5. Prohibited Activities</h3>
+                <p>You may not access or use the App for any purpose other than that for which we make the App
+                    available. The App may not be used in connection with any commercial endeavors except those that are
+                    specifically endorsed or approved by us.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <h2 style="font-family: 'Outfit'; font-size: 2rem; margin-bottom: 1rem;">DogMart</h2>
+        <p style="color: #A0AEC0;">© 2026 DogMart. All rights reserved.</p>
+    </footer>
+
+    <!-- Simple Tab Script -->
+    <script>
+        function switchTab(tabId) {
+            // Remove active from all tabs
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            // Add active to clicked
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+    </script>
+</body>
+
+</html>
