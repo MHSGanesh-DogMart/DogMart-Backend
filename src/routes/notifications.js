@@ -97,10 +97,10 @@ router.post('/chat-message', async (req, res) => {
             });
 
             // 2. Trigger FCM Push
-            await admin.messaging().sendToTopic('admin', {
-                notification: { title, body },
-                data: Object.fromEntries(Object.entries(payloadData).map(([k, v]) => [k, String(v)]))
-            });
+            // 2. Trigger FCM Push using modern API helper
+            const { sendToTopic } = require('../config/notifications');
+            await sendToTopic('admin', title, body, payloadData);
+
             return res.json({ success: true, notify: 'admin' });
         } else {
             // Admin sent it -> alert the specific user
