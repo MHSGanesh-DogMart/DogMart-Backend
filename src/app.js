@@ -32,6 +32,7 @@ app.use('/api/sos', verifyAdmin, require('./routes/sos'));
 app.use('/api/notifications', require('./routes/notifications')); // no admin guard — browser FCM tokens are self-managed
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/service-bookings', require('./routes/serviceBookings')); // Flutter + Admin panel
+app.use('/api/chats', require('./routes/chats'));
 
 // 404 handler
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));

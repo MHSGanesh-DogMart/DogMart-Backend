@@ -1,6 +1,7 @@
 const socketIO = require('socket.io');
 const { admin } = require('../config/firebase');
 const Message = require('../models/Message');
+const Chat = require('../models/Chat');
 
 let io;
 
@@ -59,17 +60,26 @@ const initSocket = (server) => {
                 });
                 await newMessage.save();
 
-                // Update Firestore `chats` document so UI Chat List updates
+                // Update MongoDB `Chat` document so UI Chat List updates without Firestore
                 try {
-                    const chatRef = admin.firestore().collection('chats').doc(chatId);
-                    await chatRef.update({
-                        lastMessage: messageText,
-                        lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
-                        lastSenderId: socket.user.uid,
-                        unreadCount: admin.firestore.FieldValue.increment(1)
-                    });
+                    // chatId format is usually "uidA_uidB", we split to get both participants securely
+                    const participants = chatId.split('_');
+                    await Chat.findOneAndUpdate(
+                        { chatId },
+                        {
+                            $set: {
+                                participants,
+                                lastMessage: messageText,
+                                lastMessageTime: new Date(),
+                                lastSenderId: socket.user.uid,
+                                isActive: true
+                            },
+                            $inc: { unreadCount: 1 }
+                        },
+                        { upsert: true, new: true }
+                    );
                 } catch (err) {
-                    console.error('Failed to update Firestore chat doc:', err);
+                    console.error('Failed to update MongoDB Chat doc:', err);
                 }
 
                 // Construct the payload
@@ -86,8 +96,14 @@ const initSocket = (server) => {
                 // Broadcast to all users in the specific room EXCEPT the sender
                 socket.to(chatId).emit('receive_message', messagePayload);
 
+                // Send a global ping to the receiver so their Chat List badges update
+                // We broadcast this to a personal room they join based on their UID if we had one,
+                // But for now, since they might be on a different screen, emit to room so they get it globally
+                socket.to(chatId).emit('chat_list_update', { chatId });
+
                 // Also emit back to the sender so their UI updates with a server-acked timestamp
                 socket.emit('message_sent_ack', messagePayload);
+                socket.emit('chat_list_update', { chatId });
 
             } catch (error) {
                 console.error('❌ Error handling sent message:', error);
