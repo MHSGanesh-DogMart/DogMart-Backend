@@ -4,25 +4,34 @@ const path = require('path');
 
 if (!admin.apps.length) {
   try {
-    const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
-      ? path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS)
-      : path.resolve(__dirname, '../../dog-mart-firebase-adminsdk.json');
+    let serviceAccount;
 
-    const serviceAccount = require(keyPath);
+    // 1. Try to load from Environment Variable (for Render/Production)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    }
+    // 2. Fallback to Local File (for local dev)
+    else {
+      const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
+        ? path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS)
+        : path.resolve(__dirname, '../../dog-mart-firebase-adminsdk.json');
+      serviceAccount = require(keyPath);
+    }
 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
       projectId: process.env.FIREBASE_PROJECT_ID || 'dog-mart-846bc',
       databaseURL: process.env.FIREBASE_DATABASE_URL || 'https://dog-mart-846bc-default-rtdb.firebaseio.com',
     });
-    console.log('✅ Firebase Admin SDK initialized (Firestore + Realtime DB)');
+    console.log('✅ Firebase Admin SDK initialized (Firestore + Realtime DB) with credentials');
   } catch (e) {
     admin.initializeApp({
       projectId: process.env.FIREBASE_PROJECT_ID || 'dog-mart-846bc',
       databaseURL: process.env.FIREBASE_DATABASE_URL || 'https://dog-mart-846bc-default-rtdb.firebaseio.com',
     });
-    console.warn('⚠️  Service account key not found. Some admin features limited.');
-    console.warn('   Expected: dog-mart-firebase-adminsdk.json');
+    console.warn(`⚠️  Firebase Init Warning: ${e.message}`);
+    console.warn('⚠️  Service account key not found. Some admin features (like DB writes) will fail.');
+    console.warn('   Please set FIREBASE_SERVICE_ACCOUNT env var or add the .json file.');
   }
 }
 
