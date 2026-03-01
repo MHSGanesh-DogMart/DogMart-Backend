@@ -59,6 +59,19 @@ const initSocket = (server) => {
                 });
                 await newMessage.save();
 
+                // Update Firestore `chats` document so UI Chat List updates
+                try {
+                    const chatRef = admin.firestore().collection('chats').doc(chatId);
+                    await chatRef.update({
+                        lastMessage: messageText,
+                        lastMessageTime: admin.firestore.FieldValue.serverTimestamp(),
+                        lastSenderId: socket.user.uid,
+                        unreadCount: admin.firestore.FieldValue.increment(1)
+                    });
+                } catch (err) {
+                    console.error('Failed to update Firestore chat doc:', err);
+                }
+
                 // Construct the payload
                 const messagePayload = {
                     id: newMessage._id,
