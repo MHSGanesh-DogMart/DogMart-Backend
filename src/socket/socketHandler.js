@@ -31,6 +31,9 @@ const initSocket = (server) => {
     io.on('connection', (socket) => {
         console.log(`📡 Socket Connected: User ${socket.user.uid}`);
 
+        // Always join a personal room for global events (like badge updates)
+        socket.join(socket.user.uid);
+
         // Join specific Chat Room
         socket.on('join_chat', (chatId) => {
             socket.join(chatId);
@@ -49,7 +52,7 @@ const initSocket = (server) => {
         // Send Message
         socket.on('send_message', async (data) => {
             try {
-                const { chatId, messageText, receiverId } = data;
+                const { chatId, messageText } = data;
 
                 // Save to MongoDB
                 const newMessage = new Message({
@@ -93,13 +96,18 @@ const initSocket = (server) => {
                     isRead: newMessage.isRead
                 };
 
-                // Broadcast to all users in the specific room EXCEPT the sender
+                // Broadcast to all users in the specific chat room EXCEPT the sender
                 socket.to(chatId).emit('receive_message', messagePayload);
-
-                // Send a global ping to the receiver so their Chat List badges update
-                // We broadcast this to a personal room they join based on their UID if we had one,
-                // But for now, since they might be on a different screen, emit to room so they get it globally
                 socket.to(chatId).emit('chat_list_update', { chatId });
+
+                // ALSO emit globally to the receiver's personal UID room
+                // so they get it even if they are on the HomeScreen and haven't joined `chatId` yet.
+                const participants = chatId.split('_');
+                const receiverId = participants.find(id => id !== socket.user.uid);
+                if (receiverId) {
+                    socket.to(receiverId).emit('receive_message', messagePayload);
+                    socket.to(receiverId).emit('chat_list_update', { chatId });
+                }
 
                 // Also emit back to the sender so their UI updates with a server-acked timestamp
                 socket.emit('message_sent_ack', messagePayload);
