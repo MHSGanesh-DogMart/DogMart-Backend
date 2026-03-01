@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../config/firebase');
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
 
 // GET payment/earnings summary
 router.get('/summary', async (req, res) => {
@@ -44,40 +46,83 @@ router.get('/transactions', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /subscribe (MOCK RAZORPAY PAYMENT)
-router.post('/subscribe', async (req, res) => {
+// POST /create-order (Generate Razorpay Order ID)
+router.post('/create-order', async (req, res) => {
     try {
-        const { userId, planType = 'monthly' } = req.body;
-        if (!userId) {
-            return res.status(400).json({ error: 'User ID is required' });
+        const { amount = 99 } = req.body;
+
+        // Initialize Razorpay dynamically from environment variables
+        const razorpay = new Razorpay({
+            key_id: process.env.RAZORPAY_KEY_ID,
+            key_secret: process.env.RAZORPAY_KEY_SECRET,
+        });
+
+        const options = {
+            amount: amount * 100, // amount in smallest currency unit (paise)
+            currency: "INR",
+            receipt: `receipt_order_${Date.now()}`
+        };
+
+        const order = await razorpay.orders.create(options);
+        res.json({ success: true, order });
+    } catch (e) {
+        console.error("Razorpay Order Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /verify-payment (Secure Signature Validation)
+router.post('/verify-payment', async (req, res) => {
+    try {
+        const {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature,
+            userId,
+            planType = 'monthly'
+        } = req.body;
+
+        if (!userId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            return res.status(400).json({ error: 'Missing payment details or User ID' });
         }
 
+        // 1. Verify Signature Securely
+        const sign = razorpay_order_id + "|" + razorpay_payment_id;
+        const expectedSign = crypto
+            .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+            .update(sign.toString())
+            .digest("hex");
+
+        if (razorpay_signature !== expectedSign) {
+            return res.status(400).json({ error: "Invalid payment signature" });
+        }
+
+        // 2. Signature is valid. Upgrade User Profile.
         const now = new Date();
         const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-        // 1. Update the User Profile
         await db.collection('users').doc(userId).update({
             isPremium: true,
             subscriptionEnd: thirtyDaysLater,
-            subscriptionId: `mock_sub_${Date.now()}`
+            subscriptionId: razorpay_order_id
         });
 
-        // 2. Log exactly to the subscriptions table to power the Admin Panel revenue charts
+        // 3. Log exactly to the subscriptions table to power Admin Panel revenue charts
         await db.collection('subscriptions').add({
             userId,
             planType,
             amount: 99,
             startDate: now,
             endDate: thirtyDaysLater,
-            razorpayPaymentId: `mock_pay_${Date.now()}`,
-            razorpayOrderId: `mock_order_${Date.now()}`,
+            razorpayPaymentId: razorpay_payment_id,
+            razorpayOrderId: razorpay_order_id,
             status: 'active',
             createdAt: now
         });
 
-        res.json({ success: true, message: 'Mock payment verified. User is now Premium.' });
+        res.json({ success: true, message: 'Payment verified successfully. User is now Premium.' });
     } catch (e) {
-        console.error("Subscription Error:", e);
+        console.error("Verification Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
