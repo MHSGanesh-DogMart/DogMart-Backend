@@ -48,17 +48,16 @@ router.post('/create', async (req, res) => {
 
         // Notify provider
         try {
+            const { sendToToken } = require('../config/notifications');
             const providerDoc = await db.collection('users').doc(providerId).get();
             const fcmToken = providerDoc.data()?.fcmToken;
             if (fcmToken) {
-                await messaging.send({
-                    token: fcmToken,
-                    notification: {
-                        title: '🐾 New Booking Request!',
-                        body: `${dogName || 'A dog'} needs ${serviceType} on ${date} at ${time}`,
-                    },
-                    data: { bookingId: bookingRef.id, type: 'new_booking' },
-                });
+                await sendToToken(
+                    fcmToken,
+                    '🐾 New Booking Request!',
+                    `${dogName || 'A dog'} needs ${serviceType} on ${date} at ${time}`,
+                    { bookingId: bookingRef.id, type: 'new_booking' }
+                );
             }
         } catch (fcmErr) {
             console.warn('FCM to provider failed:', fcmErr.message);
@@ -95,17 +94,16 @@ router.post('/confirm', async (req, res) => {
 
         // Notify user
         try {
+            const { sendToToken } = require('../config/notifications');
             const userDoc = await db.collection('users').doc(booking.userId).get();
             const fcmToken = userDoc.data()?.fcmToken;
             if (fcmToken) {
-                await messaging.send({
-                    token: fcmToken,
-                    notification: {
-                        title: '✅ Booking Confirmed!',
-                        body: `Your ${booking.serviceType} on ${booking.date} at ${booking.time} is confirmed.`,
-                    },
-                    data: { bookingId, type: 'booking_confirmed' },
-                });
+                await sendToToken(
+                    fcmToken,
+                    '✅ Booking Confirmed!',
+                    `Your ${booking.serviceType} on ${booking.date} at ${booking.time} is confirmed.`,
+                    { bookingId, type: 'booking_confirmed' }
+                );
             }
         } catch (fcmErr) {
             console.warn('FCM to user failed:', fcmErr.message);
@@ -136,17 +134,16 @@ router.post('/reject', async (req, res) => {
 
         // Notify user
         try {
+            const { sendToToken } = require('../config/notifications');
             const userDoc = await db.collection('users').doc(booking.userId).get();
             const fcmToken = userDoc.data()?.fcmToken;
             if (fcmToken) {
-                await messaging.send({
-                    token: fcmToken,
-                    notification: {
-                        title: '❌ Booking Update',
-                        body: `Your ${booking.serviceType} booking was rejected. Reason: ${reason || 'Provider unavailable'}`,
-                    },
-                    data: { bookingId, type: 'booking_rejected' },
-                });
+                await sendToToken(
+                    fcmToken,
+                    '❌ Booking Update',
+                    `Your ${booking.serviceType} booking was rejected. Reason: ${reason || 'Provider unavailable'}`,
+                    { bookingId, type: 'booking_rejected' }
+                );
             }
         } catch (fcmErr) {
             console.warn('FCM failed:', fcmErr.message);
@@ -172,17 +169,16 @@ router.post('/start', async (req, res) => {
         const targets = [booking.userId, booking.providerId];
         for (const uid of targets) {
             try {
+                const { sendToToken } = require('../config/notifications');
                 const userDoc = await db.collection('users').doc(uid).get();
                 const fcmToken = userDoc.data()?.fcmToken;
                 if (fcmToken) {
-                    await messaging.send({
-                        token: fcmToken,
-                        notification: {
-                            title: '🚀 Session Started!',
-                            body: `${booking.serviceType} session is now active. Timer running.`,
-                        },
-                        data: { bookingId, type: 'session_started' },
-                    });
+                    await sendToToken(
+                        fcmToken,
+                        '🚀 Session Started!',
+                        `${booking.serviceType} session is now active. Timer running.`,
+                        { bookingId, type: 'session_started' }
+                    );
                 }
             } catch (_) { }
         }
@@ -205,17 +201,16 @@ router.post('/complete', async (req, res) => {
 
         // Prompt user to review
         try {
+            const { sendToToken } = require('../config/notifications');
             const userDoc = await db.collection('users').doc(booking.userId).get();
             const fcmToken = userDoc.data()?.fcmToken;
             if (fcmToken) {
-                await messaging.send({
-                    token: fcmToken,
-                    notification: {
-                        title: '⭐ How was your session?',
-                        body: `Leave a review for your ${booking.serviceType} provider!`,
-                    },
-                    data: { bookingId, type: 'session_completed', providerId: booking.providerId },
-                });
+                await sendToToken(
+                    fcmToken,
+                    '⭐ How was your session?',
+                    `Leave a review for your ${booking.serviceType} provider!`,
+                    { bookingId, type: 'session_completed', providerId: booking.providerId }
+                );
             }
         } catch (_) { }
 

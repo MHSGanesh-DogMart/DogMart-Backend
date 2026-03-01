@@ -120,6 +120,23 @@ router.post('/verify-payment', async (req, res) => {
             createdAt: now
         });
 
+        // 4. Send Confirmation Push Notification to User
+        try {
+            const { sendToToken } = require('../config/notifications');
+            const userDoc = await db.collection('users').doc(userId).get();
+            const fcmToken = userDoc.exists ? userDoc.data()?.fcmToken : null;
+            if (fcmToken) {
+                await sendToToken(
+                    fcmToken,
+                    "Welcome to DogMart Premium! 🎉",
+                    "Your subscription is active. Enjoy ad-free browsing and priority listings!",
+                    { screen: '/profile' }
+                );
+            }
+        } catch (pushErr) {
+            console.error('Failed to send premium push notification:', pushErr);
+        }
+
         res.json({ success: true, message: 'Payment verified successfully. User is now Premium.' });
     } catch (e) {
         console.error("Verification Error:", e);

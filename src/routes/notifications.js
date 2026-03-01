@@ -36,14 +36,26 @@ router.post('/unsubscribe-admin', async (req, res) => {
 
 /**
  * POST /api/notifications/send-user
- * Send a manual notification to a specific user (by userId or token)
+ * Send a manual notification to a specific user (by userId or token) or to 'admin' topic
  * Body: { userId?, token?, title, body, data }
  */
 router.post('/send-user', async (req, res) => {
     try {
         const { userId, token: directToken, title, body, data = {} } = req.body;
-        let token = directToken;
 
+        // Setup payload data
+        const payloadData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));
+
+        // 1. Check if routing to Admin Topic
+        if (userId === 'admin') {
+            console.log(`📢 Sending manual notification to Admin Topic`);
+            const { sendToTopic } = require('../config/notifications');
+            const result = await sendToTopic('admin', title, body, payloadData);
+            return res.json({ success: true, messageId: result });
+        }
+
+        // 2. Route to Specific User
+        let token = directToken;
         if (!token && userId) {
             const doc = await require('../config/firebase').db.collection('users').doc(userId).get();
             token = doc.exists ? doc.data()?.fcmToken : null;
@@ -51,11 +63,8 @@ router.post('/send-user', async (req, res) => {
 
         if (!token) return res.status(404).json({ error: 'No FCM token found for user' });
 
-        const result = await admin.messaging().send({
-            token,
-            notification: { title, body },
-            data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
-        });
+        const { sendToToken } = require('../config/notifications');
+        const result = await sendToToken(token, title, body, payloadData);
 
         res.json({ success: true, messageId: result });
     } catch (e) {

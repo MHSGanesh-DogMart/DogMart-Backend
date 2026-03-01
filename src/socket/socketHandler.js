@@ -109,6 +109,25 @@ const initSocket = (server) => {
                     socket.to(receiverId).emit('receive_message', messagePayload);
                     socket.to(receiverId).emit('chat_list_update', { chatId });
                     console.log(`[Socket] Broadcasted to receiver room: ${receiverId}`);
+
+                    // Send FCM Push Notification to Receiver
+                    try {
+                        const { sendToToken } = require('../config/notifications');
+                        const db = require('../config/firebase').db;
+                        const userDoc = await db.collection('users').doc(receiverId).get();
+                        const fcmToken = userDoc.exists ? userDoc.data()?.fcmToken : null;
+
+                        if (fcmToken) {
+                            const senderName = data.senderName || 'User';
+                            const title = `New message from ${senderName}`;
+                            const body = messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText;
+                            // Payload screen directs flutter app
+                            await sendToToken(fcmToken, title, body, { screen: '/chat', chatId: chatId });
+                            console.log(`[Socket] Push notification sent to ${receiverId}`);
+                        }
+                    } catch (pushErr) {
+                        console.error('[Socket] Failed to send push notification:', pushErr);
+                    }
                 }
 
                 // Also emit back to the sender so their UI updates with a server-acked timestamp
