@@ -14,7 +14,7 @@ if (!admin.apps.length) {
     else {
       const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
         ? path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS)
-        : path.resolve(__dirname, '../../dogmart-backend/dog-mart-firebase-adminsdk.json');
+        : path.resolve(__dirname, '../../dog-mart-firebase-adminsdk.json');
       serviceAccount = require(keyPath);
     }
 

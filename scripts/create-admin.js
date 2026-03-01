@@ -20,7 +20,7 @@ const ADMIN_EMAIL = 'admin@dogmart.com';
 const ADMIN_PASSWORD = 'DogMart@2026'; // ⚠️ Change after first login!
 
 // ── Init Admin SDK for custom claims
-const keyPath = path.resolve('./dogmart-backend/dog-mart-firebase-adminsdk.json');
+const keyPath = path.resolve('./dog-mart-firebase-adminsdk.json');
 if (!admin.apps.length) {
     admin.initializeApp({ credential: admin.credential.cert(require(keyPath)), projectId: 'dog-mart-846bc' });
 }

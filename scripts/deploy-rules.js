@@ -6,7 +6,7 @@ const admin = require('firebase-admin');
 const https = require('https');
 const path = require('path');
 
-const SERVICE_ACCOUNT_PATH = path.resolve(__dirname, '../dogmart-backend/dog-mart-firebase-adminsdk.json');
+const SERVICE_ACCOUNT_PATH = path.resolve(__dirname, '../dog-mart-firebase-adminsdk.json');
 const PROJECT_ID = 'dog-mart-846bc';
 
 const FIRESTORE_RULES = `rules_version = '2';
