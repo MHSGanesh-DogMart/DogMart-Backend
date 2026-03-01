@@ -43,7 +43,9 @@ router.post('/:chatId/read', verifyToken, async (req, res) => {
         // Find the chat
         const chat = await Chat.findOne({ chatId });
         if (!chat) {
-            return res.status(404).json({ error: 'Chat not found' });
+            // Since this is a newly migrated feature, old chats might not exist in the Chat model yet.
+            // If it doesn't exist, unreadCount is inherently 0, so we just return success.
+            return res.json({ success: true, message: 'Chat not found but considered read' });
         }
 
         // Only clear unread count if the current user is NOT the last sender

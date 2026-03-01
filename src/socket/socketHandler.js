@@ -76,7 +76,7 @@ const initSocket = (server) => {
                             },
                             $inc: { unreadCount: 1 }
                         },
-                        { upsert: true, new: true }
+                        { upsert: true, returnDocument: 'after' }
                     );
                 } catch (err) {
                     console.error('Failed to update MongoDB Chat doc:', err);
