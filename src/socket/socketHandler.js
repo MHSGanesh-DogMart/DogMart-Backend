@@ -104,9 +104,11 @@ const initSocket = (server) => {
                 // so they get it even if they are on the HomeScreen and haven't joined `chatId` yet.
                 const participants = chatId.split('_');
                 const receiverId = participants.find(id => id !== socket.user.uid);
+                console.log(`[Socket] Message from ${socket.user.uid} to ${receiverId || 'unknown'}`);
                 if (receiverId) {
                     socket.to(receiverId).emit('receive_message', messagePayload);
                     socket.to(receiverId).emit('chat_list_update', { chatId });
+                    console.log(`[Socket] Broadcasted to receiver room: ${receiverId}`);
                 }
 
                 // Also emit back to the sender so their UI updates with a server-acked timestamp
