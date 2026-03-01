@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Chat = require('../models/Chat');
 const admin = require('firebase-admin');
+const { getIO } = require('../socket/socketHandler');
 
 // Middleware to verify Firebase token
 const verifyToken = async (req, res, next) => {
@@ -53,6 +54,14 @@ router.post('/:chatId/read', verifyToken, async (req, res) => {
         if (chat.lastSenderId !== req.user.uid && chat.unreadCount > 0) {
             chat.unreadCount = 0;
             await chat.save();
+
+            // Broadcast the global socket event so the unread badges instantly disappear on the client
+            try {
+                const io = getIO();
+                io.to(chatId).emit('chat_list_update', { chatId });
+            } catch (ioErr) {
+                console.error('Socket not initialized during read update', ioErr);
+            }
         }
 
         res.json({ success: true, chat });
