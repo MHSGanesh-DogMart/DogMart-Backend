@@ -1,74 +1,28 @@
 const express = require('express');
 const router = express.Router();
-const Chat = require('../models/Chat');
-const admin = require('firebase-admin');
+const { prisma } = require('../config/database');
+const { verifyJWT } = require('../middleware/jwtAuth');
 const { getIO } = require('../socket/socketHandler');
 
-// Middleware to verify Firebase token
-const verifyToken = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Unauthorized: No token provided' });
-    }
-    const token = authHeader.split(' ')[1];
-    try {
-        const decodedToken = await admin.auth().verifyIdToken(token);
-        req.user = decodedToken;
-        next();
-    } catch (error) {
-        return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-    }
-};
-
-// GET /api/chats
-// Fetch all active chats where the current user is a participant
-router.get('/', verifyToken, async (req, res) => {
+router.get('/', verifyJWT, async (req, res) => {
     try {
         const userId = req.user.uid;
-        const chats = await Chat.find({ participants: userId })
-            .sort({ lastMessageTime: -1 });
-
+        const allChats = await prisma.chat.findMany({ orderBy: { lastMessageTime: 'desc' } });
+        const chats = allChats.filter(c => (c.participants || []).map(String).includes(String(userId)));
         res.json({ chats });
-    } catch (err) {
-        console.error('Error fetching chats:', err);
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
 });
 
-// POST /api/chats/:chatId/read
-// Clear the unread count for a specific chat for the current user
-router.post('/:chatId/read', verifyToken, async (req, res) => {
+router.post('/:chatId/read', verifyJWT, async (req, res) => {
     try {
-        const { chatId } = req.params;
-
-        // Find the chat
-        const chat = await Chat.findOne({ chatId });
-        if (!chat) {
-            // Since this is a newly migrated feature, old chats might not exist in the Chat model yet.
-            // If it doesn't exist, unreadCount is inherently 0, so we just return success.
-            return res.json({ success: true, message: 'Chat not found but considered read' });
-        }
-
-        // Only clear unread count if the current user is NOT the last sender
-        // (meaning they are the one reading the other person's message)
+        const chat = await prisma.chat.findUnique({ where: { chatId: req.params.chatId } });
+        if (!chat) return res.json({ success: true });
         if (chat.lastSenderId !== req.user.uid && chat.unreadCount > 0) {
-            chat.unreadCount = 0;
-            await chat.save();
-
-            // Broadcast the global socket event so the unread badges instantly disappear on the client
-            try {
-                const io = getIO();
-                io.to(chatId).emit('chat_list_update', { chatId });
-            } catch (ioErr) {
-                console.error('Socket not initialized during read update', ioErr);
-            }
+            await prisma.chat.update({ where: { chatId: req.params.chatId }, data: { unreadCount: 0 } });
+            try { getIO().to(req.params.chatId).emit('chat_list_update', { chatId: req.params.chatId }); } catch (_) { }
         }
-
-        res.json({ success: true, chat });
-    } catch (err) {
-        console.error('Error marking chat as read:', err);
-        res.status(500).json({ error: err.message });
-    }
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

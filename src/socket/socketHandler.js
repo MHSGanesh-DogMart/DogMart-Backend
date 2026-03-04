@@ -1,153 +1,77 @@
+// src/socket/socketHandler.js — Prisma version
 const socketIO = require('socket.io');
-const { admin } = require('../config/firebase');
-const Message = require('../models/Message');
-const Chat = require('../models/Chat');
+const jwt = require('jsonwebtoken');
+const { prisma } = require('../config/database');
 
 let io;
 
 const initSocket = (server) => {
-    io = socketIO(server, {
-        cors: {
-            origin: '*',
-            methods: ['GET', 'POST']
-        }
-    });
+    io = socketIO(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
-    // 1. Authentication Middleware
-    io.use(async (socket, next) => {
+    io.use((socket, next) => {
         try {
             const token = socket.handshake.auth.token;
-            if (!token) throw new Error('Authentication error');
-            // Verify Firebase JWT token
-            const decodedToken = await admin.auth().verifyIdToken(token);
-            socket.user = decodedToken; // Attach decoded user to the socket instance
+            if (!token) throw new Error('No token');
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-replace-in-production');
+            socket.user = { uid: decoded.uid || decoded.id, ...decoded };
             next();
-        } catch (err) {
-            next(new Error('Authentication error'));
-        }
+        } catch (err) { next(new Error('Authentication error')); }
     });
 
-    // 2. Connection Events
     io.on('connection', (socket) => {
         console.log(`📡 Socket Connected: User ${socket.user.uid}`);
+        socket.join(String(socket.user.uid));
 
-        // Always join a personal room for global events (like badge updates)
-        socket.join(socket.user.uid);
+        socket.on('join_chat', (chatId) => { socket.join(chatId); });
+        socket.on('typing', ({ chatId }) => socket.to(chatId).emit('typing', { userId: socket.user.uid }));
+        socket.on('stop_typing', ({ chatId }) => socket.to(chatId).emit('stop_typing', { userId: socket.user.uid }));
 
-        // Join specific Chat Room
-        socket.on('join_chat', (chatId) => {
-            socket.join(chatId);
-            console.log(`👥 User ${socket.user.uid} joined chat ${chatId}`);
-        });
-
-        // Typing Indicators
-        socket.on('typing', ({ chatId }) => {
-            socket.to(chatId).emit('typing', { userId: socket.user.uid });
-        });
-
-        socket.on('stop_typing', ({ chatId }) => {
-            socket.to(chatId).emit('stop_typing', { userId: socket.user.uid });
-        });
-
-        // Send Message
         socket.on('send_message', async (data) => {
             try {
                 const { chatId, messageText } = data;
 
-                // Save to MongoDB
-                const newMessage = new Message({
-                    chatId,
-                    senderId: socket.user.uid,
-                    senderName: data.senderName || 'User',
-                    message: messageText
+                // Save message to PostgreSQL via Prisma
+                const newMessage = await prisma.message.create({
+                    data: { chatId, senderId: socket.user.uid, senderName: data.senderName || 'User', message: messageText },
                 });
-                await newMessage.save();
 
-                // Update MongoDB `Chat` document so UI Chat List updates without Firestore
+                // Upsert chat record
                 try {
-                    // chatId format is usually "uidA_uidB", we split to get both participants securely
-                    const participants = chatId.split('_');
-                    await Chat.findOneAndUpdate(
-                        { chatId },
-                        {
-                            $set: {
-                                participants,
-                                lastMessage: messageText,
-                                lastMessageTime: new Date(),
-                                lastSenderId: socket.user.uid,
-                                isActive: true
-                            },
-                            $inc: { unreadCount: 1 }
-                        },
-                        { upsert: true, returnDocument: 'after' }
-                    );
-                } catch (err) {
-                    console.error('Failed to update MongoDB Chat doc:', err);
-                }
+                    const participants = chatId.split('_').map(Number);
+                    await prisma.chat.upsert({
+                        where: { chatId },
+                        create: { chatId, participants, lastMessage: messageText, lastMessageTime: new Date(), lastSenderId: socket.user.uid, unreadCount: 1, isActive: true },
+                        update: { lastMessage: messageText, lastMessageTime: new Date(), lastSenderId: socket.user.uid, unreadCount: { increment: 1 } },
+                    });
+                } catch (e) { console.error('Chat upsert failed:', e); }
 
-                // Construct the payload
-                const messagePayload = {
-                    id: newMessage._id,
-                    senderId: newMessage.senderId,
-                    senderName: newMessage.senderName,
-                    message: newMessage.message,
-                    timestamp: newMessage.timestamp,
-                    chatId: newMessage.chatId,
-                    isRead: newMessage.isRead
-                };
+                const payload = { id: newMessage.id, senderId: newMessage.senderId, senderName: newMessage.senderName, message: newMessage.message, timestamp: newMessage.createdAt, chatId, isRead: false };
 
-                // Broadcast to all users in the specific chat room EXCEPT the sender
-                socket.to(chatId).emit('receive_message', messagePayload);
+                socket.to(chatId).emit('receive_message', payload);
                 socket.to(chatId).emit('chat_list_update', { chatId });
 
-                // ALSO emit globally to the receiver's personal UID room
-                // so they get it even if they are on the HomeScreen and haven't joined `chatId` yet.
-                const participants = chatId.split('_');
-                const receiverId = participants.find(id => id !== socket.user.uid);
-                console.log(`[Socket] Message from ${socket.user.uid} to ${receiverId || 'unknown'}`);
+                const receiverId = chatId.split('_').find(id => parseInt(id) !== socket.user.uid);
                 if (receiverId) {
-                    socket.to(receiverId).emit('receive_message', messagePayload);
+                    socket.to(receiverId).emit('receive_message', payload);
                     socket.to(receiverId).emit('chat_list_update', { chatId });
-                    console.log(`[Socket] Broadcasted to receiver room: ${receiverId}`);
-
-                    // Send FCM Push Notification to Receiver
                     try {
                         const { sendToToken } = require('../config/notifications');
-                        const db = require('../config/firebase').db;
-                        const userDoc = await db.collection('users').doc(receiverId).get();
-                        const fcmToken = userDoc.exists ? userDoc.data()?.fcmToken : null;
-
-                        if (fcmToken) {
-                            const senderName = data.senderName || 'User';
-                            const title = `New message from ${senderName}`;
+                        const receiver = await prisma.user.findUnique({ where: { uid: parseInt(receiverId) } });
+                        if (receiver?.fcmToken) {
                             const body = messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText;
-                            // Payload screen directs flutter app
-                            await sendToToken(fcmToken, title, body, { screen: '/chat', chatId: chatId });
-                            console.log(`[Socket] Push notification sent to ${receiverId}`);
+                            await sendToToken(receiver.fcmToken, `New message from ${data.senderName || 'User'}`, body, { screen: '/chat', chatId });
                         }
-                    } catch (pushErr) {
-                        console.error('[Socket] Failed to send push notification:', pushErr);
-                    }
+                    } catch (_) { }
                 }
 
-                // Also emit back to the sender so their UI updates with a server-acked timestamp
-                socket.emit('message_sent_ack', messagePayload);
+                socket.emit('message_sent_ack', payload);
                 socket.emit('chat_list_update', { chatId });
-
-            } catch (error) {
-                console.error('❌ Error handling sent message:', error);
-            }
+            } catch (error) { console.error('❌ send_message error:', error); }
         });
 
-        socket.on('disconnect', () => {
-            console.log(`📡 Socket Disconnected: User ${socket.user.uid}`);
-        });
+        socket.on('disconnect', () => console.log(`📡 Socket Disconnected: User ${socket.user.uid}`));
     });
 };
 
-const getIO = () => {
-    if (!io) throw new Error("Socket.io not initialized!");
-    return io;
-}
-
+const getIO = () => { if (!io) throw new Error('Socket.io not initialized!'); return io; };
 module.exports = { initSocket, getIO };

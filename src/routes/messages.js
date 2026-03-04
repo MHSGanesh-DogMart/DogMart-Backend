@@ -1,20 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const Message = require('../models/Message');
+const { prisma } = require('../config/database');
+const { verifyJWT } = require('../middleware/jwtAuth');
 
-/**
- * GET /api/messages/:chatId
- * Fetch chat history for a specific chat ID, sorted by timestamp ascending
- */
-router.get('/:chatId', async (req, res) => {
+router.get('/:chatId', verifyJWT, async (req, res) => {
     try {
-        const { chatId } = req.params;
-        const messages = await Message.find({ chatId }).sort({ timestamp: 1 });
+        const messages = await prisma.message.findMany({
+            where: { chatId: req.params.chatId },
+            orderBy: { createdAt: 'asc' },
+        });
         res.json({ success: true, messages });
-    } catch (e) {
-        console.error('Error fetching messages:', e);
-        res.status(500).json({ error: e.message });
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

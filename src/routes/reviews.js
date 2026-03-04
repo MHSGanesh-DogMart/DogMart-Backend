@@ -1,32 +1,27 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../config/firebase');
+const { prisma } = require('../config/database');
+const { verifyJWT } = require('../middleware/jwtAuth');
 
-// GET all reviews
+router.post('/', verifyJWT, async (req, res) => {
+    try {
+        const review = await prisma.review.create({
+            data: { targetId: parseInt(req.body.providerId || req.body.targetId), reviewerId: req.user.uid, reviewerName: req.body.reviewerName || '', rating: req.body.rating, comment: req.body.comment || '' },
+        });
+        try {
+            const allReviews = await prisma.review.findMany({ where: { targetId: parseInt(req.body.providerId) } });
+            const avg = allReviews.reduce((s, r) => s + r.rating, 0) / allReviews.length;
+            await prisma.serviceProvider.update({ where: { userId: parseInt(req.body.providerId) }, data: { rating: parseFloat(avg.toFixed(1)), reviewCount: allReviews.length } });
+        } catch (_) { }
+        res.status(201).json({ message: 'Review submitted', review });
+    } catch (err) { res.status(500).json({ error: 'Server error' }); }
+});
+
 router.get('/', async (req, res) => {
     try {
-        const { flagged } = req.query;
-        let query = db.collection('reviews').orderBy('createdAt', 'desc');
-        if (flagged === 'true') query = query.where('flagged', '==', true);
-        const snap = await query.get();
-        const reviews = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const where = req.query.targetId ? { targetId: parseInt(req.query.targetId) } : {};
+        const reviews = await prisma.review.findMany({ where, orderBy: { createdAt: 'desc' } });
         res.json({ reviews });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// PATCH acknowledge flagged review
-router.patch('/:id/acknowledge', async (req, res) => {
-    try {
-        await db.collection('reviews').doc(req.params.id).update({ acknowledged: true, updatedAt: new Date() });
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// DELETE review
-router.delete('/:id', async (req, res) => {
-    try {
-        await db.collection('reviews').doc(req.params.id).delete();
-        res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

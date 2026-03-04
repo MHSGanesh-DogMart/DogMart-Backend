@@ -1,54 +1,44 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../config/firebase');
+const { prisma } = require('../config/database');
+const { verifyJWT } = require('../middleware/jwtAuth');
 
-// GET all categories
 router.get('/', async (req, res) => {
     try {
-        const snap = await db.collection('categories').orderBy('createdAt', 'desc').get();
-        const categories = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const where = {};
+        if (req.query.isActive === 'true') where.isActive = true;
+        const categories = await prisma.category.findMany({ where, orderBy: { createdAt: 'desc' } });
         res.json({ categories });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST create category
-router.post('/', async (req, res) => {
+router.post('/', verifyJWT, async (req, res) => {
     try {
-        const { name, emoji, description, durationHours, pricePerHour, priceType, maxPerDay, isActive } = req.body;
-        const docRef = await db.collection('categories').add({
-            name, emoji, description, durationHours, pricePerHour,
-            priceType: priceType || 'fixed',
-            maxPerDay: maxPerDay || 1,
-            isActive: isActive !== undefined ? isActive : true,
-            createdAt: new Date(), updatedAt: new Date()
-        });
-        res.json({ success: true, id: docRef.id });
+        const cat = await prisma.category.create({ data: req.body });
+        res.json({ success: true, id: cat.id, category: cat });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PUT update category
-router.put('/:id', async (req, res) => {
+router.put('/:id', verifyJWT, async (req, res) => {
     try {
-        await db.collection('categories').doc(req.params.id).update({ ...req.body, updatedAt: new Date() });
+        await prisma.category.update({ where: { id: parseInt(req.params.id) }, data: req.body });
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE category
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', verifyJWT, async (req, res) => {
     try {
-        await db.collection('categories').doc(req.params.id).delete();
+        await prisma.category.delete({ where: { id: parseInt(req.params.id) } });
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH toggle active
-router.patch('/:id/toggle', async (req, res) => {
+router.patch('/:id/toggle', verifyJWT, async (req, res) => {
     try {
-        const doc = await db.collection('categories').doc(req.params.id).get();
-        const current = doc.data().isActive;
-        await db.collection('categories').doc(req.params.id).update({ isActive: !current, updatedAt: new Date() });
-        res.json({ success: true, isActive: !current });
+        const cat = await prisma.category.findUnique({ where: { id: parseInt(req.params.id) } });
+        if (!cat) return res.status(404).json({ error: 'Category not found' });
+        const updated = await prisma.category.update({ where: { id: cat.id }, data: { isActive: !cat.isActive } });
+        res.json({ success: true, isActive: updated.isActive });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
