@@ -1,134 +1,146 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../config/firebase');
-const { sendToTopic, sendToToken } = require('../config/notifications');
+const { prisma } = require('../config/database');
+const { createAndSendTopic, createAndSendNotification } = require('../config/notifications');
 
-// ── Helper — get user FCM token from Firestore ──────────────────────────────
-async function getUserToken(userId) {
-    if (!userId) return null;
-    try {
-        const doc = await db.collection('users').doc(userId).get();
-        return doc.exists ? doc.data()?.fcmToken || null : null;
-    } catch { return null; }
-}
+// Removed getUserToken as createAndSendNotification handles it internally
 
-// GET all bookings with optional filters
+// GET all bookings
 router.get('/', async (req, res) => {
     try {
-        const { status, date, limit = 100 } = req.query;
-        let query = db.collection('bookings').orderBy('createdAt', 'desc').limit(Number(limit));
-        if (status) query = query.where('status', '==', status);
-        const snap = await query.get();
-        const bookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        res.json({ bookings, total: bookings.length });
+        const { status, limit = 100 } = req.query;
+        const where = status ? { status } : {};
+        const bookings = await prisma.booking.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            take: Number(limit)
+        });
+        const bookingsWithStringIds = bookings.map(b => ({
+            ...b,
+            id: String(b.id),
+            userId: String(b.userId),
+            listingId: b.listingId ? String(b.listingId) : null
+        }));
+        res.json({ bookings: bookingsWithStringIds, total: bookings.length });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET single booking
 router.get('/:id', async (req, res) => {
     try {
-        const doc = await db.collection('bookings').doc(req.params.id).get();
-        if (!doc.exists) return res.status(404).json({ error: 'Booking not found' });
-        res.json({ id: doc.id, ...doc.data() });
+        const booking = await prisma.booking.findUnique({
+            where: { id: parseInt(req.params.id) }
+        });
+        if (!booking) return res.status(404).json({ error: 'Booking not found' });
+        const bookingWithStringIds = {
+            ...booking,
+            id: String(booking.id),
+            userId: String(booking.userId),
+            listingId: booking.listingId ? String(booking.listingId) : null
+        };
+        res.json(bookingWithStringIds);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST create booking (triggered by Flutter app via backend — optional direct route)
+// POST create booking
 router.post('/', async (req, res) => {
     try {
-        const data = {
-            ...req.body,
-            status: 'pending',
-            createdAt: new Date(),
-        };
-        const ref = await db.collection('bookings').add(data);
+        const { userId, providerId, listingId, sessionType, amountPaid, date, time } = req.body;
+        const booking = await prisma.booking.create({
+            data: {
+                userId: parseInt(userId),
+                providerId: providerId ? parseInt(providerId) : null,
+                listingId: listingId ? parseInt(listingId) : null,
+                sessionType,
+                amountPaid: parseFloat(amountPaid || 0),
+                status: 'pending',
+                date: date || null,
+                timeSlot: time || null
+            }
+        });
 
-        // 🔔 Notify admin panel (web push to 'admin' topic)
-        await sendToTopic(
+        // 🔔 Notify admin
+        await createAndSendTopic(
             'admin',
             '🆕 New Booking Received',
-            `${data.sessionType || 'Session'} booking from ${data.userName || 'a user'} — ₹${data.amountPaid || 0}`,
-            { bookingId: ref.id, type: 'new_booking' }
+            `${sessionType || 'Session'} booking — ₹${amountPaid || 0}`,
+            { bookingId: booking.id.toString(), type: 'new_booking' },
+            'new_booking'
         );
 
-        res.json({ id: ref.id, success: true });
+        // 🔔 Notify provider if applicable
+        if (providerId) {
+            await createAndSendNotification(
+                providerId,
+                'New Booking Request! 📆',
+                `You have a new request for ${sessionType || 'a service'}.`,
+                { bookingId: booking.id.toString(), type: 'new_booking' },
+                'new_booking'
+            );
+        }
+
+        res.json({ id: booking.id, success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH booking status — admin confirms/cancels
+// PATCH status
 router.patch('/:id/status', async (req, res) => {
     try {
         const { status, reason } = req.body;
-        const bookingRef = db.collection('bookings').doc(req.params.id);
+        const bookingId = parseInt(req.params.id);
 
-        // Fetch booking to get userId and session info
-        const snap = await bookingRef.get();
-        if (!snap.exists) return res.status(404).json({ error: 'Booking not found' });
-        const booking = snap.data();
+        const booking = await prisma.booking.update({
+            where: { id: bookingId },
+            data: { status, adminNote: reason }
+        });
 
-        const updateData = {
-            status,
-            adminNote: reason || null,
-            updatedAt: new Date(),
-        };
-
+        // 🔔 Notify user
+        let title = '', body = '', type = '';
         if (status === 'confirmed') {
-            updateData.confirmedAt = new Date();
+            title = '✅ Booking Accepted!';
+            body = `Your ${booking.sessionType || 'session'} has been accepted.`;
+            type = 'booking_confirmed';
+        } else if (status === 'cancelled') {
+            title = '❌ Booking Rejected!';
+            body = reason || 'Your booking has been rejected.';
+            type = 'booking_rejected';
         }
 
-        await bookingRef.update(updateData);
-
-        // 🔔 Notify the user based on status change
-        if (booking?.userId) {
-            const token = await getUserToken(booking.userId);
-
-            if (status === 'confirmed' && token) {
-                await sendToToken(
-                    token,
-                    '✅ Booking Accepted!',
-                    `Your ${booking.sessionType || 'session'} on ${booking.date || ''} has been accepted. See you there!`,
-                    { bookingId: req.params.id, type: 'booking_confirmed', screen: '/my-bookings' }
-                );
-            } else if (status === 'cancelled' && token) {
-                await sendToToken(
-                    token,
-                    '❌ Booking Rejected!',
-                    reason
-                        ? `Booking rejected: ${reason}`
-                        : `Your ${booking.sessionType || 'session'} booking has been rejected.`,
-                    { bookingId: req.params.id, type: 'booking_cancelled', screen: '/my-bookings' }
-                );
-            } else if (status === 'active' && token) {
-                await sendToToken(
-                    token,
-                    '🟢 Session Started!',
-                    `Your ${booking.sessionType || 'session'} is now active. Have a great time!`,
-                    { bookingId: req.params.id, type: 'session_started', screen: '/active-session' }
-                );
-            }
+        if (title) {
+            await createAndSendNotification(
+                booking.userId,
+                title,
+                body,
+                { bookingId: bookingId.toString(), type },
+                type
+            );
         }
 
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET bookings stats (dashboard)
+// GET stats
 router.get('/stats/summary', async (req, res) => {
     try {
-        const allSnap = await db.collection('bookings').get();
-        const allBookings = allSnap.docs.map(d => d.data());
-        const today = new Date().toDateString();
+        const stats = await prisma.booking.groupBy({
+            by: ['status'],
+            _count: { id: true },
+            _sum: { amountPaid: true }
+        });
 
-        const stats = {
-            total: allBookings.length,
-            today: allBookings.filter(b => new Date(b.createdAt?.toDate?.() || b.createdAt).toDateString() === today).length,
-            active: allBookings.filter(b => b.status === 'active').length,
-            completed: allBookings.filter(b => b.status === 'completed').length,
-            cancelled: allBookings.filter(b => b.status === 'cancelled').length,
-            totalEarnings: allBookings.filter(b => b.status === 'completed').reduce((sum, b) => sum + (b.amountPaid || 0), 0),
+        const total = await prisma.booking.count();
+        const summary = {
+            total,
+            active: stats.find(s => s.status === 'active')?._count.id || 0,
+            completed: stats.find(s => s.status === 'completed')?._count.id || 0,
+            cancelled: stats.find(s => s.status === 'cancelled')?._count.id || 0,
+            totalEarnings: stats.find(s => s.status === 'completed')?._sum.amountPaid || 0
         };
-        res.json(stats);
+        res.json(summary);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+module.exports = router;
 
 module.exports = router;

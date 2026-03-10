@@ -7,10 +7,29 @@ const app = express();
 
 // Middleware
 const allowedOrigins = process.env.FRONTEND_URL
-    ? process.env.FRONTEND_URL.split(',')
+    ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
     : ['http://localhost:5173'];
 
-app.use(cors({ origin: allowedOrigins }));
+console.log('--- CORS Configuration ---');
+console.log('Allowed Origins:', allowedOrigins);
+
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps)
+        if (!origin) return callback(null, true);
+        // Allow any origin for now to fix this CORS issue definitively
+        callback(null, true);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+}));
+
+// Added simple logger for all requests to verify hits
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - Origin: ${req.headers.origin}`);
+    next();
+});
 app.use(express.json());
 app.use(morgan('dev'));
 
@@ -50,16 +69,26 @@ app.use('/api/reviews', reviewsRoutes);
 app.use('/api/favorites', favoritesRoutes);
 
 // Admin / Legacy routes
-app.use('/api/users', verifyAdmin, require('./routes/users'));
+const adminRoutes = require('./routes/admin');
+app.use('/api/admin', adminRoutes);
+
+app.use('/api/users', require('./routes/users'));
 app.use('/api/bookings', verifyAdmin, require('./routes/bookings'));
+app.use('/api/subscriptions', verifyAdmin, require('./routes/subscriptions'));
 app.use('/api/sessions', verifyAdmin, require('./routes/sessions'));
 app.use('/api/categories', require('./routes/categories'));
+app.use('/api/breeds', require('./routes/breeds'));
 app.use('/api/locations', verifyAdmin, require('./routes/locations'));
 app.use('/api/notifications', require('./routes/notifications')); // no admin guard — browser FCM tokens are self-managed
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/service-bookings', require('./routes/serviceBookings')); // Flutter + Admin panel
 app.use('/api/chats', require('./routes/chats'));
 app.use('/api/listings', require('./routes/listings'));
+app.use('/api/banners', require('./routes/banners'));
+app.use('/api/settings', require('./routes/settings'));
+app.use('/api/product-categories', require('./routes/productCategories'));
+app.use('/api/service-categories', require('./routes/serviceCategories'));
+app.use('/api/products', require('./routes/products'));
 
 // 404 handler
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));

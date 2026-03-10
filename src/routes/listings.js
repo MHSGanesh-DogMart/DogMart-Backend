@@ -16,7 +16,14 @@ router.get('/', verifyOptional, async (req, res) => {
             prisma.listing.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: parseInt(limit) }),
             prisma.listing.count({ where }),
         ]);
-        res.json({ listings, total, page: parseInt(page) });
+        const listingsWithStringIds = listings.map(l => ({
+            ...l,
+            id: String(l.id),
+            userId: String(l.userId),
+            categoryId: l.categoryId ? String(l.categoryId) : null,
+            breedId: l.breedId ? String(l.breedId) : null
+        }));
+        res.json({ listings: listingsWithStringIds, total, page: parseInt(page) });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -28,7 +35,14 @@ router.get('/user/:userId', verifyOptional, async (req, res) => {
             where: { userId: parseInt(req.params.userId) },
             orderBy: { createdAt: 'desc' }, skip, take: parseInt(limit),
         });
-        res.json({ listings });
+        const listingsWithStringIds = listings.map(l => ({
+            ...l,
+            id: String(l.id),
+            userId: String(l.userId),
+            categoryId: l.categoryId ? String(l.categoryId) : null,
+            breedId: l.breedId ? String(l.breedId) : null
+        }));
+        res.json({ listings: listingsWithStringIds });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -36,15 +50,40 @@ router.get('/:id', verifyOptional, async (req, res) => {
     try {
         const listing = await prisma.listing.findUnique({ where: { id: parseInt(req.params.id) } });
         if (!listing) return res.status(404).json({ error: 'Listing not found' });
-        res.json({ listing });
+        const listingWithStringIds = {
+            ...listing,
+            id: String(listing.id),
+            userId: String(listing.userId),
+            categoryId: listing.categoryId ? String(listing.categoryId) : null,
+            breedId: listing.breedId ? String(listing.breedId) : null
+        };
+        res.json({ listing: listingWithStringIds });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.post('/', verifyJWT, async (req, res) => {
     try {
-        const listing = await prisma.listing.create({ data: { ...req.body, userId: req.user.uid } });
+        const { categoryId, breedId, ...data } = req.body;
+        const listing = await prisma.listing.create({
+            data: {
+                ...data,
+                userId: parseInt(req.user.uid),
+                categoryId: categoryId ? parseInt(categoryId) : null,
+                breedId: breedId ? parseInt(breedId) : null,
+            }
+        });
+
+        // Auto-increment user's listing count
+        await prisma.user.update({
+            where: { uid: parseInt(req.user.uid) },
+            data: { freeListingsUsed: { increment: 1 } }
+        });
+
         res.status(201).json({ listing });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) {
+        console.error('Create listing error:', e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 router.put('/:id', verifyJWT, async (req, res) => {

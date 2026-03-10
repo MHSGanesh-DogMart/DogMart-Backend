@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { admin } = require('../config/firebase');
+const { verifySelfOrAdmin } = require('../middleware/jwtAuth');
+const { verifyAdmin } = require('../middleware/auth');
 
 /**
  * POST /api/notifications/subscribe-admin
@@ -35,11 +37,11 @@ router.post('/unsubscribe-admin', async (req, res) => {
 });
 
 /**
- * POST /api/notifications/send-user
+ * POST /api/notifications/send-user (Admin Only)
  * Send a manual notification to a specific user (by userId or token) or to 'admin' topic
  * Body: { userId?, token?, title, body, data }
  */
-router.post('/send-user', async (req, res) => {
+router.post('/send-user', verifyAdmin, async (req, res) => {
     try {
         const { userId, token: directToken, title, body, data = {} } = req.body;
 
@@ -89,64 +91,73 @@ router.post('/chat-message', async (req, res) => {
         const body = messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText;
         const payloadData = { screen: '/chat', bookingId }; // To let mobile app navigate to chat
 
-        const db = require('../config/firebase').db;
+        const { createAndSendNotification, createAndSendTopic } = require('../config/notifications');
 
         if (senderType === 'user') {
             // User sent it -> alert all Admins
             console.log(`📢 Sending chat notification to Admin Topic`);
-
-            // 1. Save to Firestore for Admin in-app notifications
-            await db.collection('notifications').add({
-                target: 'admin',
-                title,
-                body,
-                data: Object.fromEntries(Object.entries(payloadData).map(([k, v]) => [k, String(v)])),
-                isRead: false,
-                createdAt: new Date()
-            });
-
-            // 2. Trigger FCM Push
-            // 2. Trigger FCM Push using modern API helper
-            const { sendToTopic } = require('../config/notifications');
-            await sendToTopic('admin', title, body, payloadData);
-
+            await createAndSendTopic('admin', title, body, payloadData, 'chat');
             return res.json({ success: true, notify: 'admin' });
         } else {
             // Admin sent it -> alert the specific user
-            const bookingDoc = await db.collection('bookings').doc(bookingId).get();
+            const bookingDoc = await require('../config/firebase').db.collection('bookings').doc(bookingId).get();
             if (!bookingDoc.exists) return res.status(404).json({ error: 'Booking not found' });
 
             const userId = bookingDoc.data().userId;
 
-            // 1. Save to Firestore for User in-app notifications
-            await db.collection('notifications').add({
-                targetUserId: userId,
-                title,
-                body,
-                data: Object.fromEntries(Object.entries(payloadData).map(([k, v]) => [k, String(v)])),
-                isRead: false,
-                createdAt: new Date()
-            });
-
-            // 2. Trigger FCM Push
-            const userDoc = await db.collection('users').doc(userId).get();
-            const token = userDoc.exists ? userDoc.data()?.fcmToken : null;
-
-            if (!token) {
-                console.log(`⚠️ No FCM token found for user ${userId} to receive chat notification.`);
-                return res.json({ success: false, reason: 'No FCM token' });
-            }
-
             console.log(`📢 Sending chat notification to User ${userId}`);
-            await admin.messaging().send({
-                token,
-                notification: { title, body },
-                data: Object.fromEntries(Object.entries(payloadData).map(([k, v]) => [k, String(v)])),
-            });
+            await createAndSendNotification(userId, title, body, payloadData, 'chat');
             return res.json({ success: true, notify: 'user' });
         }
     } catch (e) {
         console.error('Error sending chat notification:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * GET /api/notifications/user/:uid (Self or Admin)
+ */
+router.get('/user/:uid', verifySelfOrAdmin, async (req, res) => {
+    try {
+        const { limit = 50 } = req.query;
+        const notifications = await require('../config/database').prisma.notification.findMany({
+            where: { userId: parseInt(req.params.uid) },
+            orderBy: { createdAt: 'desc' },
+            take: Number(limit)
+        });
+        res.json({ notifications });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * PUT /api/notifications/:id/read
+ */
+router.put('/:id/read', async (req, res) => {
+    try {
+        await require('../config/database').prisma.notification.update({
+            where: { id: parseInt(req.params.id) },
+            data: { isRead: true }
+        });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * PUT /api/notifications/user/:uid/read-all (Self or Admin)
+ */
+router.put('/user/:uid/read-all', verifySelfOrAdmin, async (req, res) => {
+    try {
+        await require('../config/database').prisma.notification.updateMany({
+            where: { userId: parseInt(req.params.uid), isRead: false },
+            data: { isRead: true }
+        });
+        res.json({ success: true });
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });

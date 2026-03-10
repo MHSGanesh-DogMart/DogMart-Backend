@@ -8,6 +8,7 @@
  */
 
 const { admin } = require('./firebase');
+const { prisma } = require('./database');
 
 /**
  * Send to a specific device token (user notification).
@@ -83,4 +84,55 @@ async function sendMulticast(tokens, title, body, data = {}) {
     }
 }
 
-module.exports = { sendToToken, sendToTopic, sendMulticast };
+/**
+ * Create notification in Postgres and send FCM to user
+ */
+async function createAndSendNotification(userId, title, body, data = {}, type = 'general') {
+    try {
+        // 1. Save to DB
+        await prisma.notification.create({
+            data: {
+                userId: parseInt(userId),
+                target: 'user',
+                title,
+                body,
+                data,
+                type
+            }
+        });
+
+        // 2. Look up token and send FCM
+        const user = await prisma.user.findUnique({ where: { uid: parseInt(userId) }, select: { fcmToken: true } });
+        if (user && user.fcmToken) {
+            await sendToToken(user.fcmToken, title, body, data);
+        }
+    } catch (e) {
+        console.error('createAndSendNotification error:', e);
+    }
+}
+
+/**
+ * Create notification in Postgres and send FCM to topic
+ */
+async function createAndSendTopic(topic, title, body, data = {}, type = 'general') {
+    try {
+        // 1. Save to DB
+        await prisma.notification.create({
+            data: {
+                userId: null,
+                target: topic,
+                title,
+                body,
+                data,
+                type
+            }
+        });
+
+        // 2. Send FCM
+        await sendToTopic(topic, title, body, data);
+    } catch (e) {
+        console.error('createAndSendTopic error:', e);
+    }
+}
+
+module.exports = { sendToToken, sendToTopic, sendMulticast, createAndSendNotification, createAndSendTopic };

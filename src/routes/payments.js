@@ -1,14 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../config/firebase');
+const { prisma } = require('../config/database');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 
 // GET payment/earnings summary
 router.get('/summary', async (req, res) => {
     try {
-        const snap = await db.collection('bookings').where('status', '==', 'completed').get();
-        const bookings = snap.docs.map(d => d.data());
+        const bookings = await prisma.booking.findMany({
+            where: { status: 'completed' },
+        });
 
         const now = new Date();
         const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay());
@@ -16,10 +17,10 @@ router.get('/summary', async (req, res) => {
 
         const total = bookings.reduce((s, b) => s + (b.amountPaid || 0), 0);
         const thisWeek = bookings
-            .filter(b => new Date(b.createdAt?.toDate?.() || b.createdAt) >= startOfWeek)
+            .filter(b => b.createdAt >= startOfWeek)
             .reduce((s, b) => s + (b.amountPaid || 0), 0);
         const thisMonth = bookings
-            .filter(b => new Date(b.createdAt?.toDate?.() || b.createdAt) >= startOfMonth)
+            .filter(b => b.createdAt >= startOfMonth)
             .reduce((s, b) => s + (b.amountPaid || 0), 0);
 
         // Earnings by session type
@@ -36,12 +37,11 @@ router.get('/summary', async (req, res) => {
 // GET all transactions
 router.get('/transactions', async (req, res) => {
     try {
-        const snap = await db.collection('bookings')
-            .where('status', '==', 'completed')
-            .orderBy('createdAt', 'desc')
-            .limit(200)
-            .get();
-        const txns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const txns = await prisma.booking.findMany({
+            where: { status: 'completed' },
+            orderBy: { createdAt: 'desc' },
+            take: 200,
+        });
         res.json({ transactions: txns });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -74,7 +74,7 @@ router.post('/create-order', async (req, res) => {
 // POST /verify-payment (Secure Signature Validation)
 router.post('/verify-payment', async (req, res) => {
     try {
-        const {
+        let {
             razorpay_order_id,
             razorpay_payment_id,
             razorpay_signature,
@@ -85,6 +85,8 @@ router.post('/verify-payment', async (req, res) => {
         if (!userId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
             return res.status(400).json({ error: 'Missing payment details or User ID' });
         }
+
+        userId = parseInt(userId);
 
         // 1. Verify Signature Securely
         const sign = razorpay_order_id + "|" + razorpay_payment_id;
@@ -101,38 +103,39 @@ router.post('/verify-payment', async (req, res) => {
         const now = new Date();
         const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-        await db.collection('users').doc(userId).update({
-            isPremium: true,
-            subscriptionEnd: thirtyDaysLater,
-            subscriptionId: razorpay_order_id
+        await prisma.user.update({
+            where: { uid: userId },
+            data: {
+                isPremium: true,
+                subscriptionEnd: thirtyDaysLater,
+                subscriptionId: razorpay_order_id
+            }
         });
 
         // 3. Log exactly to the subscriptions table to power Admin Panel revenue charts
-        await db.collection('subscriptions').add({
-            userId,
-            planType,
-            amount: 99,
-            startDate: now,
-            endDate: thirtyDaysLater,
-            razorpayPaymentId: razorpay_payment_id,
-            razorpayOrderId: razorpay_order_id,
-            status: 'active',
-            createdAt: now
+        await prisma.subscription.create({
+            data: {
+                userId: userId,
+                planName: planType,
+                amount: 99,
+                startDate: now,
+                endDate: thirtyDaysLater,
+                status: 'active',
+                razorpayPaymentId: razorpay_payment_id,
+                razorpayOrderId: razorpay_order_id,
+            }
         });
 
         // 4. Send Confirmation Push Notification to User
         try {
-            const { sendToToken } = require('../config/notifications');
-            const userDoc = await db.collection('users').doc(userId).get();
-            const fcmToken = userDoc.exists ? userDoc.data()?.fcmToken : null;
-            if (fcmToken) {
-                await sendToToken(
-                    fcmToken,
-                    "Welcome to DogMart Premium! 🎉",
-                    "Your subscription is active. Enjoy ad-free browsing and priority listings!",
-                    { screen: '/profile' }
-                );
-            }
+            const { createAndSendNotification } = require('../config/notifications');
+            await createAndSendNotification(
+                userId,
+                "Welcome to Premium! ⭐",
+                "Your subscription is active. Enjoy unlimited listings and premium features!",
+                { screen: '/profile' },
+                "subscription"
+            );
         } catch (pushErr) {
             console.error('Failed to send premium push notification:', pushErr);
         }

@@ -1,53 +1,118 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../config/firebase');
+const { prisma } = require('../config/database');
+const { verifyAdmin } = require('../middleware/auth');
+const { verifyJWT } = require('../middleware/jwtAuth');
 
-// GET all users
-router.get('/', async (req, res) => {
+// Helper to check if user is admin OR accessing their own data
+const verifySelfOrAdmin = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'No token provided' });
+    }
+    const token = authHeader.split(' ')[1];
+
     try {
-        const { status, limit = 50 } = req.query;
-        let query = db.collection('users').orderBy('createdAt', 'desc').limit(Number(limit));
-        if (status) query = query.where('status', '==', status);
-        const snap = await query.get();
-        const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        res.json({ users, total: users.length });
+        // 1. Try Firebase Admin Verify
+        const { auth } = require('../config/firebase');
+        const decodedAdmin = await auth.verifyIdToken(token).catch(() => null);
+
+        if (decodedAdmin) {
+            // Check if actually an admin
+            const ADMIN_EMAILS = ['admin@dogmart.app', 'm.hemanth517@gmail.com'];
+            const email = decodedAdmin.email.toLowerCase();
+            if (decodedAdmin.admin || ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email)) {
+                req.user = decodedAdmin;
+                req.isAdmin = true;
+                return next();
+            }
+        }
+
+        // 2. Try Custom JWT Verify
+        const jwt = require('jsonwebtoken');
+        const { JWT_SECRET } = require('../middleware/jwtAuth');
+        const decodedUser = jwt.verify(token, JWT_SECRET);
+
+        if (decodedUser) {
+            req.user = decodedUser;
+            req.isAdmin = false;
+
+            // Check if UID matches the request ID
+            const targetId = parseInt(req.params.id);
+            if (decodedUser.uid !== targetId) {
+                return res.status(403).json({ error: 'Access denied: You can only access your own data' });
+            }
+            return next();
+        }
+
+        throw new Error('Invalid token');
+    } catch (err) {
+        return res.status(401).json({ error: 'Unauthorized', detail: err.message });
+    }
+};
+
+// GET all users (Admin Only)
+router.get('/', verifyAdmin, async (req, res) => {
+    try {
+        const { limit = 50 } = req.query;
+        const users = await prisma.user.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: Number(limit)
+        });
+        const usersWithStringIds = users.map(u => ({ ...u, uid: String(u.uid) }));
+        const total = await prisma.user.count();
+        res.json({ users: usersWithStringIds, total });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET single user
-router.get('/:id', async (req, res) => {
+// GET single user (Self or Admin)
+router.get('/:id', verifySelfOrAdmin, async (req, res) => {
     try {
-        const doc = await db.collection('users').doc(req.params.id).get();
-        if (!doc.exists) return res.status(404).json({ error: 'User not found' });
-        res.json({ id: doc.id, ...doc.data() });
+        const user = await prisma.user.findUnique({
+            where: { uid: parseInt(req.params.id) }
+        });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        res.json(user);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH - block/unblock user
-router.patch('/:id/status', async (req, res) => {
+// GET user subscriptions (Self or Admin)
+router.get('/:id/subscriptions', verifySelfOrAdmin, async (req, res) => {
+    try {
+        const subscriptions = await prisma.subscription.findMany({
+            where: { userId: parseInt(req.params.id) },
+            orderBy: { createdAt: 'desc' }
+        });
+        const subsWithStringIds = subscriptions.map(s => ({ ...s, id: String(s.id) }));
+        res.json({ subscriptions: subsWithStringIds });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH - block/unblock user (Admin Only)
+router.patch('/:id/status', verifyAdmin, async (req, res) => {
     try {
         const { isBlocked } = req.body;
-        await db.collection('users').doc(req.params.id).update({ isBlocked, updatedAt: new Date() });
+        await prisma.user.update({
+            where: { uid: parseInt(req.params.id) },
+            data: { isBlocked }
+        });
         res.json({ success: true, message: isBlocked ? 'User blocked' : 'User unblocked' });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET user bookings
-router.get('/:id/bookings', async (req, res) => {
+// PUT /:id/premium (Admin Only)
+router.put('/:id/premium', verifyAdmin, async (req, res) => {
     try {
-        const snap = await db.collection('bookings').where('userId', '==', req.params.id).orderBy('createdAt', 'desc').get();
-        const bookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        res.json({ bookings });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// GET user reviews
-router.get('/:id/reviews', async (req, res) => {
-    try {
-        const snap = await db.collection('reviews').where('userId', '==', req.params.id).orderBy('createdAt', 'desc').get();
-        const reviews = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        res.json({ reviews });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+        const { isProvider } = req.body;
+        await prisma.user.update({
+            where: { uid: parseInt(req.params.id) },
+            data: { isPremium: true } // Providers get premium access by default
+        });
+        res.json({ success: true, message: 'User upgraded successfully' });
+    } catch (e) {
+        console.error("Premium Upgrade Error:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 module.exports = router;
