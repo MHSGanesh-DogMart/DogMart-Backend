@@ -62,4 +62,16 @@ router.patch('/listings/:id/status', verifyAdmin, async (req, res) => {
     }
 });
 
+// DELETE /api/admin/listings/:id - Delete a listing permanently
+router.delete('/listings/:id', verifyAdmin, async (req, res) => {
+    try {
+        await prisma.listing.delete({
+            where: { id: parseInt(req.params.id) }
+        });
+        res.json({ success: true, message: 'Listing deleted successfully' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 module.exports = router;

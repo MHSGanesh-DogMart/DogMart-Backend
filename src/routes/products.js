@@ -121,4 +121,21 @@ router.patch('/:id/status', verifyAdmin, async (req, res) => {
     }
 });
 
+// Delete product (Admin or Seller, but here Admin)
+router.delete('/:id', verifyAdmin, async (req, res) => {
+    try {
+        // Find product to handle variant deletion if necessary (Prisma cascade might handle it depending on schema)
+        // Since schema for ProductVariant doesn't explicitly state onDelete: Cascade, we should delete variants first.
+        await prisma.productVariant.deleteMany({
+            where: { productId: parseInt(req.params.id) }
+        });
+        const product = await prisma.product.delete({
+            where: { id: parseInt(req.params.id) }
+        });
+        res.json({ success: true, message: 'Product deleted', product });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
 module.exports = router;
