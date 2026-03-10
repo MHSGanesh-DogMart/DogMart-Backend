@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/database');
 const { verifyAdmin } = require('../middleware/auth');
+const { verifyJWT, verifyOptional } = require('../middleware/jwtAuth');
 
 // Create a product
-router.post('/', async (req, res) => {
+router.post('/', verifyJWT, async (req, res) => {
     const {
         sellerId,
         catId,
@@ -33,7 +34,7 @@ router.post('/', async (req, res) => {
     try {
         const product = await prisma.product.create({
             data: {
-                sellerId: parseInt(sellerId),
+                sellerId: parseInt(req.user.uid) || parseInt(sellerId),
                 catId: parseInt(catId),
                 subCatId: subCatId ? parseInt(subCatId) : null,
                 name,
