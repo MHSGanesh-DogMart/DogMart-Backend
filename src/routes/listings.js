@@ -67,6 +67,7 @@ router.post('/', verifyJWT, async (req, res) => {
         const listing = await prisma.listing.create({
             data: {
                 ...data,
+                status: 'active',
                 userId: parseInt(req.user.uid),
                 categoryId: categoryId ? parseInt(categoryId) : null,
                 breedId: breedId ? parseInt(breedId) : null,

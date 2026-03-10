@@ -34,8 +34,10 @@ router.get('/stats', verifyAdmin, async (req, res) => {
 // GET /api/admin/listings - List all listings with filters
 router.get('/listings', verifyAdmin, async (req, res) => {
     try {
-        const { status, limit = 50 } = req.query;
-        const where = status ? { status } : {};
+        const { status, type, limit = 50 } = req.query;
+        const where = {};
+        if (status) where.status = status;
+        if (type) where.type = type;
 
         const listings = await prisma.listing.findMany({
             where,

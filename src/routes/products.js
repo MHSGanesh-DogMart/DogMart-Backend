@@ -55,6 +55,7 @@ router.post('/', verifyJWT, async (req, res) => {
                 deliveryFreeAbove: deliveryFreeAbove ? parseFloat(deliveryFreeAbove) : null,
                 deliveryDays,
                 returnPolicy: returnPolicy || 'none',
+                status: 'active',
                 variants: hasVariants && variants ? {
                     create: variants.map(v => ({
                         name: v.name,
