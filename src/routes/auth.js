@@ -4,7 +4,7 @@ const { prisma } = require('../config/database');
 const bcrypt = require('bcryptjs');
 const { generateToken, verifyJWT } = require('../middleware/jwtAuth');
 const sendEmail = require('../utils/sendEmail');
-const { createAndSendNotification } = require('../config/notifications');
+const { createAndSendNotification, sendToToken } = require('../config/notifications');
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -47,6 +47,26 @@ router.post('/login', async (req, res) => {
         if (user.isBlocked) return res.status(403).json({ error: 'Account blocked' });
 
         const token = generateToken(user);
+
+        // ── Single-device enforcement ──────────────────────────────────────────
+        // If user has an existing FCM token from another device, notify it to logout
+        if (user.fcmToken) {
+            try {
+                await sendToToken(user.fcmToken, 'Session Ended 🔐', 'Your account was logged into on another device.', { action: 'force_logout' });
+                // Clear the old token
+                await prisma.user.update({ where: { uid: user.uid }, data: { fcmToken: null } });
+            } catch (_) { }
+        }
+
+        // Send login success notification (saved to DB, new token will be attached when app calls /fcm-token)
+        await createAndSendNotification(
+            user.uid,
+            'New Login Detected 🔓',
+            `You logged in to DogMart. If this wasn't you, secure your account.`,
+            { action: 'login' },
+            'general'
+        );
+
         res.json({ token, user: { uid: user.uid, email: user.email, name: user.name, profilePhoto: user.profilePhoto } });
     } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
@@ -82,6 +102,21 @@ router.post('/google', async (req, res) => {
                 'Welcome to DogMart! 🐾',
                 'Find the perfect furry friend or the best services for your dog.',
                 {},
+                'general'
+            );
+        } else {
+            // Single-device enforcement for returning users
+            if (user.fcmToken) {
+                try {
+                    await sendToToken(user.fcmToken, 'Session Ended 🔐', 'Your account was logged into on another device.', { action: 'force_logout' });
+                    await prisma.user.update({ where: { uid: user.uid }, data: { fcmToken: null } });
+                } catch (_) { }
+            }
+            await createAndSendNotification(
+                user.uid,
+                'New Login Detected 🔓',
+                `You logged in to DogMart. If this wasn't you, secure your account.`,
+                { action: 'login' },
                 'general'
             );
         }

@@ -3,6 +3,7 @@ const router = express.Router();
 const { prisma } = require('../config/database');
 const { verifyAdmin } = require('../middleware/auth');
 const { verifyJWT, verifyOptional } = require('../middleware/jwtAuth');
+const { createAndSendNotification } = require('../config/notifications');
 
 // Create a product
 router.post('/', verifyJWT, async (req, res) => {
@@ -67,6 +68,17 @@ router.post('/', verifyJWT, async (req, res) => {
             },
             include: { variants: true }
         });
+
+        // Send a notification to the seller
+        const uid = parseInt(req.user.uid) || parseInt(sellerId);
+        await createAndSendNotification(
+            uid,
+            'Product Created 🛍️',
+            `Your product "${name}" is now live!`,
+            { productId: product.id },
+            'general'
+        );
+
         res.status(201).json(product);
     } catch (error) {
         res.status(400).json({ error: error.message });

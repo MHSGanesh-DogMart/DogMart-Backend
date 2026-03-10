@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/database');
 const { verifyJWT, verifyOptional } = require('../middleware/jwtAuth');
+const { createAndSendNotification } = require('../config/notifications');
 
 router.get('/', verifyOptional, async (req, res) => {
     try {
@@ -79,6 +80,15 @@ router.post('/', verifyJWT, async (req, res) => {
             where: { uid: parseInt(req.user.uid) },
             data: { freeListingsUsed: { increment: 1 } }
         });
+
+        // Send a notification to the creator
+        await createAndSendNotification(
+            req.user.uid,
+            listing.type === 'service' ? 'Service Created 🛠️' : 'Pet Listed 🐶',
+            `Your listing "${listing.title || listing.breed}" is now live!`,
+            { listingId: listing.id, type: listing.type },
+            'general'
+        );
 
         res.status(201).json({ listing });
     } catch (e) {

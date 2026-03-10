@@ -55,11 +55,17 @@ const initSocket = (server) => {
                     socket.to(receiverId).emit('receive_message', payload);
                     socket.to(receiverId).emit('chat_list_update', { chatId });
                     try {
-                        const { sendToToken } = require('../config/notifications');
+                        const { createAndSendNotification } = require('../config/notifications');
                         const receiver = await prisma.user.findUnique({ where: { uid: parseInt(receiverId) } });
                         if (receiver?.fcmToken) {
                             const body = messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText;
-                            await sendToToken(receiver.fcmToken, `New message from ${data.senderName || 'User'}`, body, { screen: '/chat', chatId });
+                            await createAndSendNotification(
+                                receiver.uid,
+                                `New message from ${data.senderName || 'User'}`,
+                                body,
+                                { screen: '/chat', chatId },
+                                'chat'
+                            );
                         }
                     } catch (_) { }
                 }
