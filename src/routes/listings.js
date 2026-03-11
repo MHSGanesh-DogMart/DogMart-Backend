@@ -6,11 +6,12 @@ const { createAndSendNotification } = require('../config/notifications');
 
 router.get('/', verifyOptional, async (req, res) => {
     try {
-        const { status, categoryId, breedId, page = 1, limit = 10 } = req.query;
+        const { status, categoryId, breedId, type, page = 1, limit = 10 } = req.query;
         const where = {};
         if (status) where.status = status;
         if (categoryId) where.categoryId = parseInt(categoryId);
         if (breedId) where.breedId = parseInt(breedId);
+        if (type) where.type = type;
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const [listings, total] = await Promise.all([
