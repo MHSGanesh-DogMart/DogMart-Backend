@@ -83,6 +83,8 @@ app.use('/api/notifications', require('./routes/notifications')); // no admin gu
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/service-bookings', require('./routes/serviceBookings')); // Flutter + Admin panel
 app.use('/api/chats', require('./routes/chats'));
+app.use('/api/pets', require('./routes/pets'));
+app.use('/api/services', require('./routes/services'));
 app.use('/api/listings', require('./routes/listings'));
 app.use('/api/banners', require('./routes/banners'));
 app.use('/api/settings', require('./routes/settings'));

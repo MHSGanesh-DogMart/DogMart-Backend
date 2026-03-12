@@ -383,3 +383,26 @@ model ServiceCategory {
 
   @@map("service_categories")
 }
+
+model UserBlock {
+  id          Int      @id @default(autoincrement())
+  blockerId   Int      // user who blocked
+  blockedId   Int      // user who was blocked
+  createdAt   DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@map("user_blocks")
+}
+
+model UserReport {
+  id           Int      @id @default(autoincrement())
+  reporterId   Int
+  reportedId   Int
+  reason       String   @default("")
+  details      String   @default("")
+  status       String   @default("pending") // pending, reviewed, dismissed
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("user_reports")
+}

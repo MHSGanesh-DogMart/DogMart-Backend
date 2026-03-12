@@ -21,21 +21,29 @@ router.post('/register', verifyJWT, async (req, res) => {
 
 router.get('/', async (req, res) => {
     try {
-        const { limit = 20 } = req.query;
-        // Fetch only verified providers
+        const { serviceType, page = 1, limit = 20 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        // Build where clause — always require verified; optionally filter by serviceType
+        const where = { isVerified: true };
+        if (serviceType) {
+            // services is stored as a JSON array — filter providers whose services list contains the given type
+            where.services = { array_contains: serviceType };
+        }
+
         const providers = await prisma.serviceProvider.findMany({
-            where: { isVerified: true },
+            where,
             orderBy: { rating: 'desc' },
-            take: Number(limit)
+            skip,
+            take: parseInt(limit),
         });
 
-        // Convert BigInts/IDs to strings if necessary
         const safeProviders = providers.map(p => ({
             ...p,
             userId: String(p.userId)
         }));
 
-        res.json({ providers: safeProviders });
+        res.json({ providers: safeProviders, page: parseInt(page) });
     } catch (err) {
         console.error('Error fetching providers:', err);
         res.status(500).json({ error: 'Server error' });

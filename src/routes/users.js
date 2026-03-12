@@ -115,4 +115,53 @@ router.put('/:id/premium', verifyAdmin, async (req, res) => {
     }
 });
 
+// POST /api/users/block — block another user
+router.post('/block', verifyJWT, async (req, res) => {
+    try {
+        const blockerId = req.user.uid;
+        const blockedId = parseInt(req.body.userId);
+        if (!blockedId || blockerId === blockedId) return res.status(400).json({ error: 'Invalid userId' });
+
+        await prisma.userBlock.upsert({
+            where: { blockerId_blockedId: { blockerId, blockedId } },
+            create: { blockerId, blockedId },
+            update: {},
+        });
+        res.json({ success: true, message: 'User blocked' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/users/block/:userId — unblock a user
+router.delete('/block/:userId', verifyJWT, async (req, res) => {
+    try {
+        const blockerId = req.user.uid;
+        const blockedId = parseInt(req.params.userId);
+        await prisma.userBlock.deleteMany({ where: { blockerId, blockedId } });
+        res.json({ success: true, message: 'User unblocked' });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/users/blocked — list of users I've blocked
+router.get('/blocked', verifyJWT, async (req, res) => {
+    try {
+        const blocks = await prisma.userBlock.findMany({ where: { blockerId: req.user.uid } });
+        res.json({ blockedIds: blocks.map(b => b.blockedId) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/users/report — report a user
+router.post('/report', verifyJWT, async (req, res) => {
+    try {
+        const reporterId = req.user.uid;
+        const { userId, reason, details } = req.body;
+        const reportedId = parseInt(userId);
+        if (!reportedId || reporterId === reportedId) return res.status(400).json({ error: 'Invalid userId' });
+
+        const report = await prisma.userReport.create({
+            data: { reporterId, reportedId, reason: reason || 'Other', details: details || '' }
+        });
+        res.json({ success: true, reportId: report.id });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;
